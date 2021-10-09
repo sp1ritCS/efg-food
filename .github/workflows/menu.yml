@@ -1,0 +1,63 @@
+# vim: set ts=2 sw=2 expandtab:
+name: Gather latest menu
+
+on:
+  push:
+    branches:
+      - master
+      - actions
+  schedule:
+    - cron: '00 00 * * Mon'
+
+jobs:
+  menu:
+    name: Menu
+    runs-on: ubuntu-latest
+    container:
+      image: registry.opensuse.org/opensuse/tumbleweed:latest
+      options: --privileged
+    env:
+      VERSION: v1
+      LANG: en_US.UTF8
+    steps:
+    - name: Download dependencies 🦎
+      run: |
+        zypper dup -y
+        zypper in -y --no-recommends tar gzip git curl rust cargo gcc "pkgconfig(openssl)" "pkgconfig(libcurl)" java java-devel maven
+      env:
+        ZYPP_SINGLE_RPMTRANS: 1
+        ZYPP_MEDIANETWORK: 1
+    - name: Checkout Repository 🛎️
+      uses: actions/checkout@v2
+    - name: Configure git 🔧
+      run: |
+        git config --global user.name 'EFG Bot'
+        git config --global user.email 'noreply@sp1rit.arpa'
+        git remote set-url origin https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}
+    - name: Build tabula-java
+      run: |
+        git clone https://github.com/tabulapdf/tabula-java.git
+        pushd tabula-java
+        git checkout adb7738c87f0019cf95519ff37b58e4d4992c51d
+        curl -Lo tabula.patch "https://raw.githubusercontent.com/sp1ritCS/tabula-rs/7e99c590c9fba8fb34b2fd48b14781bd859a7cb8/0001-add-ffi-constructor-to-CommandLineApp.patch"
+        git am tabula.patch
+        mvn clean compile assembly:single
+        popd
+    - name: Build parsing utility 🔨
+      run: |
+        cargo build --release
+        cargo install --root /usr/local/ --path .
+    - name: Add latest menu 🍔
+      run: |
+        git fetch origin store:refs/remotes/store --depth 1
+        git checkout -b store store
+        mkdir -p ${{ env.VERSION }}
+        NEW=${{ env.VERSION }}/WK$(date +%W%Y).json
+        JAVA_HOME=/usr/lib64/jvm/java
+        LD_PRELOAD="$JAVA_HOME/lib/server/libjvm.so" efg-food-parser ./tabula-java/target/tabula*.jar > $NEW
+        ln -sf WK$(date +%W%Y).json ${{ env.VERSION }}/latest.json
+    - name: Update store 🌐
+      run: |
+        NEW=${{ env.VERSION }}/WK$(date +%W%Y).json
+        git add ${{ env.VERSION }}/latest.json $NEW
+        git commit -m "Updated store to reflect the current plan as of WK$(date +%W%Y)" && git push origin store || echo "No changes to commit"
