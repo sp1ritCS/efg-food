@@ -23,7 +23,7 @@ jobs:
     - name: Download dependencies 🦎
       run: |
         zypper dup -y
-        zypper in -y --no-recommends tar gzip git curl rust cargo gcc "pkgconfig(openssl)" "pkgconfig(libcurl)" java java-devel maven
+        zypper in -y --no-recommends tar gzip git curl rust cargo gcc "pkgconfig(openssl)" "pkgconfig(libcurl)" java java-devel maven alts
       env:
         ZYPP_SINGLE_RPMTRANS: 1
         ZYPP_MEDIANETWORK: 1
